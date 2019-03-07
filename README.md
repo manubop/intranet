@@ -1,12 +1,12 @@
 Intranet Access Module
 ===
-Install dependencies:
+Install:
 ```
-npm install
+npm install git+ssh://git@github.com:manubop/intranet.git
 ```
 Sample usage:
 ```javascript
-const intranet = require('./intranet.js')
+const intranet = require('intranet')
 
 function logResponse (res) {
 
