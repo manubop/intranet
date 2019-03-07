@@ -1,5 +1,9 @@
 Intranet Access Module
 ===
+Install dependencies:
+```
+npm install
+```
 Sample usage:
 ```javascript
 const intranet = require('./intranet.js')
