@@ -134,7 +134,7 @@ var IntranetSession = function (addr, username, password) {
 
 	var handleLastRedirection = function (hostname, path, postData, done) {
 
-		httpsPost(hostname, path, '', postData, function (resp) {
+		httpsPost(hostname, path, '', postData, (resp) => {
 
 			if (resp.statusCode === 302) {
 
@@ -144,7 +144,7 @@ var IntranetSession = function (addr, username, password) {
 
 					_cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-					httpsGet(redirect.hostname, redirect.path, _cookiestr, function (resp, data) {
+					httpsGet(redirect.hostname, redirect.path, _cookiestr, (resp, data) => {
 						done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
 					});
 
@@ -162,9 +162,9 @@ var IntranetSession = function (addr, username, password) {
 
 	var handleSSO = function (hostname, path, cookiestr, done) {
 
-		httpsGet(hostname, path, cookiestr, function (resp, data) {
+		httpsGet(hostname, path, cookiestr, (resp, data) => {
 
-			xml2js.parseString(data, function (err, result) {
+			xml2js.parseString(data, (err, result) => {
 
 				if (result) {
 
@@ -193,13 +193,13 @@ var IntranetSession = function (addr, username, password) {
 			vhost: 'standard'
 		};
 
-		httpsPost(hostname, path, cookiestr, postData, function (resp) {			
+		httpsPost(hostname, path, cookiestr, postData, (resp) => {			
 
 			if (resp.statusCode === 200) {
 
 				let cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-				httpsPost(hostname, path, cookiestr, postData, function (resp) {
+				httpsPost(hostname, path, cookiestr, postData, (resp) => {
 
 					if (resp.statusCode === 302) {
 
@@ -233,9 +233,9 @@ var IntranetSession = function (addr, username, password) {
 
 	var handleLogout = function (hostname, path, cookiestr, done) {
 
-		httpsGet(hostname, path, cookiestr, function (resp, data) {
+		httpsGet(hostname, path, cookiestr, (resp, data) => {
 			
-			xml2js.parseString(data, function (err, result) {
+			xml2js.parseString(data, (err, result) => {
 
 				if (result) {
 
@@ -244,7 +244,7 @@ var IntranetSession = function (addr, username, password) {
 						[form.input[0]['$'].name]: form.input[0]['$'].value
 					};
 
-					httpsPost(hostname, path, '', postData, function(resp) {
+					httpsPost(hostname, path, '', postData, (resp) => {
 
 						done(false, resp);
 					});
@@ -277,7 +277,7 @@ var IntranetSession = function (addr, username, password) {
 
 			} else {
 
-				httpsGet(redirect.hostname, redirect.path, cookiestr, function (resp, data) {
+				httpsGet(redirect.hostname, redirect.path, cookiestr, (resp, data) => {
 					handleGetResponse(redirect.hostname, resp.headers, done);
 				});
 			}
@@ -290,11 +290,11 @@ var IntranetSession = function (addr, username, password) {
 
 	this.get = function (path) {
 
-		return new Promise(function (resolve, reject) {
+		return new Promise((resolve, reject) => {
 
-			_lock.acquire('cookie', function (done) {
+			_lock.acquire('cookie', (done) => {
 
-				httpsGet(addr, path, _cookiestr, function (resp, data) {
+				httpsGet(addr, path, _cookiestr, (resp, data) => {
 
 					if (resp.statusCode === 302) {
 
@@ -306,7 +306,7 @@ var IntranetSession = function (addr, username, password) {
 					}
 				});
 				
-			}, function (err, data) {
+			}, (err, data) => {
 
 				if (!err) {
 					resolve(data);
