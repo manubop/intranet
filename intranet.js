@@ -31,297 +31,297 @@ if (process.env.NODE_ENV !== 'production') {
 
 var getCookieStr = function (cookies) {
 
-	return cookies ? cookies.filter(cookie => !cookie.includes('=deleted')).map(cookie => cookie.split(';')[0]).join('; ') : '';
+    return cookies ? cookies.filter(cookie => !cookie.includes('=deleted')).map(cookie => cookie.split(';')[0]).join('; ') : '';
 };
 
 var httpsPost = function (hostname, path, cookies, postData, handler) {
 
-	logger.log('verbose', 'post: ' + hostname + path);
-	logger.log('verbose', 'cookies: ' + cookies);
+    logger.log('verbose', 'post: ' + hostname + path);
+    logger.log('verbose', 'cookies: ' + cookies);
 
-	if (typeof postData !== 'string') {
-		postData = querystring.stringify(postData);
-	}
+    if (typeof postData !== 'string') {
+        postData = querystring.stringify(postData);
+    }
 
-	logger.log('verbose', 'postData: ' + postData);
+    logger.log('verbose', 'postData: ' + postData);
 
-	let options = {
-		hostname: hostname,
-		path: path,
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/x-www-form-urlencoded',
-       		'Content-Length': postData.length,
-       		'Cookie': cookies
-       	}
-	};
+    let options = {
+        hostname: hostname,
+        path: path,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': postData.length,
+            'Cookie': cookies
+        }
+    };
 
-	let req = https.request(options, (resp) => {
+    let req = https.request(options, (resp) => {
 
-		logger.log('verbose', 'statusCode: ' + resp.statusCode);
-		logger.log('verbose', JSON.stringify(resp.headers));
+        logger.log('verbose', 'statusCode: ' + resp.statusCode);
+        logger.log('verbose', JSON.stringify(resp.headers));
 
-		handler(resp);
-	});
+        handler(resp);
+    });
 
-	req.on('error', (e) => {
-	  	handler(e);
-	});
+    req.on('error', (e) => {
+        handler(e);
+    });
 
-	req.write(postData);
-	req.end();
+    req.write(postData);
+    req.end();
 }
 
 var httpsGet = function (hostname, path, cookies, handler) {
 
-	logger.log('verbose', 'get: ' + hostname + path);
-	logger.log('verbose', 'cookies: ' + cookies);
+    logger.log('verbose', 'get: ' + hostname + path);
+    logger.log('verbose', 'cookies: ' + cookies);
 
-	let options = {
-		hostname: hostname,
-		path: path,
-		headers: { 
-			'Cookie': cookies 
-		}
-	};
+    let options = {
+        hostname: hostname,
+        path: path,
+        headers: { 
+            'Cookie': cookies 
+        }
+    };
 
-	https.get(options, (resp) => {
+    https.get(options, (resp) => {
 
-		logger.log('verbose', 'statusCode: ' + resp.statusCode);
-		logger.log('verbose', JSON.stringify(resp.headers));
+        logger.log('verbose', 'statusCode: ' + resp.statusCode);
+        logger.log('verbose', JSON.stringify(resp.headers));
 
-		let data = '';
+        let data = '';
 
-		resp.on('data', (chunk) => {
-			data += chunk;
-		});
+        resp.on('data', (chunk) => {
+            data += chunk;
+        });
 
-		resp.on('end', () => {
-			if (handler) {
-				handler(resp, data)
-			}
-		});
-	});
+        resp.on('end', () => {
+            if (handler) {
+                handler(resp, data)
+            }
+        });
+    });
 }
 
 var getRedirection = function (hostname, location) {
 
-	if (location) {
+    if (location) {
 
-		let parsed = url.parse(location);
+        let parsed = url.parse(location);
 
-		if (parsed.hostname) {
+        if (parsed.hostname) {
 
-			return {
-				hostname: parsed.hostname,
-				path: parsed.path
-			}
-		}
+            return {
+                hostname: parsed.hostname,
+                path: parsed.path
+            }
+        }
 
-		return {
-			hostname: hostname,
-			path: location
-		}
-	}
+        return {
+            hostname: hostname,
+            path: location
+        }
+    }
 
-	return null;
+    return null;
 }
 
 var IntranetSession = function (addr, username, password) {
 
-	var _cookiestr = '';
-	var _lock = new AsyncLock();
+    var _cookiestr = '';
+    var _lock = new AsyncLock();
 
-	var handleLastRedirection = function (hostname, path, postData, done) {
+    var handleLastRedirection = function (hostname, path, postData, done) {
 
-		httpsPost(hostname, path, '', postData, (resp) => {
+        httpsPost(hostname, path, '', postData, (resp) => {
 
-			if (resp.statusCode === 302) {
+            if (resp.statusCode === 302) {
 
-				let redirect = getRedirection(hostname, resp.headers.location);
+                let redirect = getRedirection(hostname, resp.headers.location);
 
-				if (redirect) {
+                if (redirect) {
 
-					_cookiestr = getCookieStr(resp.headers["set-cookie"]);
+                    _cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-					httpsGet(redirect.hostname, redirect.path, _cookiestr, (resp, data) => {
-						done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
-					});
+                    httpsGet(redirect.hostname, redirect.path, _cookiestr, (resp, data) => {
+                        done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
+                    });
 
-				} else {
+                } else {
 
-					done(true);
-				}
+                    done(true);
+                }
 
-			} else {
+            } else {
 
-				done(true);
-			}
-		});
-	}
+                done(true);
+            }
+        });
+    }
 
-	var handleSSO = function (hostname, path, cookiestr, done) {
+    var handleSSO = function (hostname, path, cookiestr, done) {
 
-		httpsGet(hostname, path, cookiestr, (resp, data) => {
+        httpsGet(hostname, path, cookiestr, (resp, data) => {
 
-			xml2js.parseString(data, (err, result) => {
+            xml2js.parseString(data, (err, result) => {
 
-				if (result) {
+                if (result) {
 
-					let form = result.html.apm_do_not_touch[0].body[0].form[0];
-			    	let parsed = url.parse(form['$'].action);
-			    	let postData = {
-						[form.input[0]['$'].name]: form.input[0]['$'].value,
-						[form.input[1]['$'].name]: form.input[1]['$'].value
-					};
+                    let form = result.html.apm_do_not_touch[0].body[0].form[0];
+                    let parsed = url.parse(form['$'].action);
+                    let postData = {
+                        [form.input[0]['$'].name]: form.input[0]['$'].value,
+                        [form.input[1]['$'].name]: form.input[1]['$'].value
+                    };
 
-					handleLastRedirection(parsed.hostname, parsed.path, postData, done);
+                    handleLastRedirection(parsed.hostname, parsed.path, postData, done);
 
-			    } else {
+                } else {
 
-					done(true);
-				}
-			});
-		});
-	};
+                    done(true);
+                }
+            });
+        });
+    };
 
-	var handleLogin = function (hostname, path, cookiestr, done) {
+    var handleLogin = function (hostname, path, cookiestr, done) {
 
-		let postData = {
-			username: username,
-			password: password,
-			vhost: 'standard'
-		};
+        let postData = {
+            username: username,
+            password: password,
+            vhost: 'standard'
+        };
 
-		httpsPost(hostname, path, cookiestr, postData, (resp) => {			
+        httpsPost(hostname, path, cookiestr, postData, (resp) => {          
 
-			if (resp.statusCode === 200) {
+            if (resp.statusCode === 200) {
 
-				let cookiestr = getCookieStr(resp.headers["set-cookie"]);
+                let cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-				httpsPost(hostname, path, cookiestr, postData, (resp) => {
+                httpsPost(hostname, path, cookiestr, postData, (resp) => {
 
-					if (resp.statusCode === 302) {
+                    if (resp.statusCode === 302) {
 
-						let redirect = getRedirection(hostname, resp.headers.location);
+                        let redirect = getRedirection(hostname, resp.headers.location);
 
-						if (redirect) {
+                        if (redirect) {
 
-							logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
+                            logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
 
-							let cookiestr = getCookieStr(resp.headers["set-cookie"]);
+                            let cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-							handleSSO(redirect.hostname, redirect.path, cookiestr, done);
+                            handleSSO(redirect.hostname, redirect.path, cookiestr, done);
 
-						} else {
+                        } else {
 
-							done(true);
-						}
+                            done(true);
+                        }
 
-					} else {
+                    } else {
 
-						done(true);
-					}
-				});
+                        done(true);
+                    }
+                });
 
-			} else {
+            } else {
 
-				done(true);
-			}			
-		});
-	};
+                done(true);
+            }           
+        });
+    };
 
-	var handleLogout = function (hostname, path, cookiestr, done) {
+    var handleLogout = function (hostname, path, cookiestr, done) {
 
-		httpsGet(hostname, path, cookiestr, (resp, data) => {
-			
-			xml2js.parseString(data, (err, result) => {
+        httpsGet(hostname, path, cookiestr, (resp, data) => {
+            
+            xml2js.parseString(data, (err, result) => {
 
-				if (result) {
+                if (result) {
 
-					let form = result.html.apm_do_not_touch[0].body[0].form[0];
-			    	let postData = {
-						[form.input[0]['$'].name]: form.input[0]['$'].value
-					};
+                    let form = result.html.apm_do_not_touch[0].body[0].form[0];
+                    let postData = {
+                        [form.input[0]['$'].name]: form.input[0]['$'].value
+                    };
 
-					httpsPost(hostname, path, '', postData, (resp) => {
+                    httpsPost(hostname, path, '', postData, (resp) => {
 
-						done(false, resp);
-					});
+                        done(false, resp);
+                    });
 
-			    } else {
+                } else {
 
-					done(true);
-				}
-			});
-		});
-	}
+                    done(true);
+                }
+            });
+        });
+    }
 
-	var handleGetResponse = function (hostname, headers, done) {
+    var handleGetResponse = function (hostname, headers, done) {
 
-		let redirect = getRedirection(hostname, headers.location);
+        let redirect = getRedirection(hostname, headers.location);
 
-		if (redirect) {
+        if (redirect) {
 
-			logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
+            logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
 
-			let cookiestr = getCookieStr(headers["set-cookie"]);
+            let cookiestr = getCookieStr(headers["set-cookie"]);
 
-			if (redirect.path === '/my.policy') {
+            if (redirect.path === '/my.policy') {
 
-				handleLogin(redirect.hostname, redirect.path, cookiestr, done);
+                handleLogin(redirect.hostname, redirect.path, cookiestr, done);
 
-			} else if (redirect.path.indexOf('/saml/idp/profile/redirect/sls?SAMLRequest=') === 0) {
+            } else if (redirect.path.indexOf('/saml/idp/profile/redirect/sls?SAMLRequest=') === 0) {
 
-				handleLogout(redirect.hostname, redirect.path, cookiestr, done);
+                handleLogout(redirect.hostname, redirect.path, cookiestr, done);
 
-			} else {
+            } else {
 
-				httpsGet(redirect.hostname, redirect.path, cookiestr, (resp, data) => {
-					handleGetResponse(redirect.hostname, resp.headers, done);
-				});
-			}
+                httpsGet(redirect.hostname, redirect.path, cookiestr, (resp, data) => {
+                    handleGetResponse(redirect.hostname, resp.headers, done);
+                });
+            }
 
-		} else {
+        } else {
 
-			done(true);
-		}
-	}
+            done(true);
+        }
+    }
 
-	this.get = function (path) {
+    this.get = function (path) {
 
-		return new Promise((resolve, reject) => {
+        return new Promise((resolve, reject) => {
 
-			_lock.acquire('cookie', (done) => {
+            _lock.acquire('cookie', (done) => {
 
-				httpsGet(addr, path, _cookiestr, (resp, data) => {
+                httpsGet(addr, path, _cookiestr, (resp, data) => {
 
-					if (resp.statusCode === 302) {
+                    if (resp.statusCode === 302) {
 
-						handleGetResponse(addr, resp.headers, done);
+                        handleGetResponse(addr, resp.headers, done);
 
-					} else {
+                    } else {
 
-						done(false, { path: path, statusCode: resp.statusCode, body: data });
-					}
-				});
-				
-			}, (err, data) => {
+                        done(false, { path: path, statusCode: resp.statusCode, body: data });
+                    }
+                });
+                
+            }, (err, data) => {
 
-				if (!err) {
-					resolve(data);
-				} else {
-					reject();
-				}
+                if (!err) {
+                    resolve(data);
+                } else {
+                    reject();
+                }
 
-			}, {});
-		});
-	}
+            }, {});
+        });
+    }
 
-	this.logout = function () {
+    this.logout = function () {
 
-		return this.get('/Shibboleth.sso/Logout');
-	}
+        return this.get('/Shibboleth.sso/Logout');
+    }
 }
 
 exports.IntranetSession = IntranetSession;
