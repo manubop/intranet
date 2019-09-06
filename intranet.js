@@ -136,27 +136,22 @@ var IntranetSession = function (addr, username, password) {
 
         httpsPost(hostname, path, '', postData, (resp) => {
 
-            if (resp.statusCode === 302) {
-
-                let redirect = getRedirection(hostname, resp.headers.location);
-
-                if (redirect) {
-
-                    _cookiestr = getCookieStr(resp.headers["set-cookie"]);
-
-                    httpsGet(redirect.hostname, redirect.path, _cookiestr, (resp, data) => {
-                        done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
-                    });
-
-                } else {
-
-                    done(true);
-                }
-
-            } else {
-
+            if (resp.statusCode !== 302) {
                 done(true);
             }
+
+            let redirect = getRedirection(hostname, resp.headers.location);
+
+            if (!redirect) {
+                done(true);
+            }
+
+            _cookiestr = getCookieStr(resp.headers["set-cookie"]);
+
+            httpsGet(redirect.hostname, redirect.path, _cookiestr, (resp, data) => {
+                done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
+            });
+
         });
     }
 
@@ -166,21 +161,18 @@ var IntranetSession = function (addr, username, password) {
 
             xml2js.parseString(data, (err, result) => {
 
-                if (result) {
-
-                    let form = result.html.apm_do_not_touch[0].body[0].form[0];
-                    let parsed = url.parse(form['$'].action);
-                    let postData = {
-                        [form.input[0]['$'].name]: form.input[0]['$'].value,
-                        [form.input[1]['$'].name]: form.input[1]['$'].value
-                    };
-
-                    handleLastRedirection(parsed.hostname, parsed.path, postData, done);
-
-                } else {
-
+                if (!result) {
                     done(true);
                 }
+
+                let form = result.html.apm_do_not_touch[0].body[0].form[0];
+                let parsed = url.parse(form['$'].action);
+                let postData = {
+                    [form.input[0]['$'].name]: form.input[0]['$'].value,
+                    [form.input[1]['$'].name]: form.input[1]['$'].value
+                };
+
+                handleLastRedirection(parsed.hostname, parsed.path, postData, done);
             });
         });
     };
@@ -195,39 +187,30 @@ var IntranetSession = function (addr, username, password) {
 
         httpsPost(hostname, path, cookiestr, postData, (resp) => {          
 
-            if (resp.statusCode === 200) {
+            if (resp.statusCode !== 200) {
+                done(true);
+            }           
+
+            let cookiestr = getCookieStr(resp.headers["set-cookie"]);
+
+            httpsPost(hostname, path, cookiestr, postData, (resp) => {
+
+                if (resp.statusCode !== 302) {
+                    done(true);
+                }
+
+                let redirect = getRedirection(hostname, resp.headers.location);
+
+                if (!redirect) {
+                    done(true);
+                }
+
+                logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
 
                 let cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
-                httpsPost(hostname, path, cookiestr, postData, (resp) => {
-
-                    if (resp.statusCode === 302) {
-
-                        let redirect = getRedirection(hostname, resp.headers.location);
-
-                        if (redirect) {
-
-                            logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
-
-                            let cookiestr = getCookieStr(resp.headers["set-cookie"]);
-
-                            handleSSO(redirect.hostname, redirect.path, cookiestr, done);
-
-                        } else {
-
-                            done(true);
-                        }
-
-                    } else {
-
-                        done(true);
-                    }
-                });
-
-            } else {
-
-                done(true);
-            }           
+                handleSSO(redirect.hostname, redirect.path, cookiestr, done);
+            });
         });
     };
 
@@ -237,22 +220,18 @@ var IntranetSession = function (addr, username, password) {
             
             xml2js.parseString(data, (err, result) => {
 
-                if (result) {
-
-                    let form = result.html.apm_do_not_touch[0].body[0].form[0];
-                    let postData = {
-                        [form.input[0]['$'].name]: form.input[0]['$'].value
-                    };
-
-                    httpsPost(hostname, path, '', postData, (resp) => {
-
-                        done(false, resp);
-                    });
-
-                } else {
-
+                if (!result) {
                     done(true);
                 }
+
+                let form = result.html.apm_do_not_touch[0].body[0].form[0];
+                let postData = {
+                    [form.input[0]['$'].name]: form.input[0]['$'].value
+                };
+
+                httpsPost(hostname, path, '', postData, (resp) => {
+                    done(false, resp);
+                });
             });
         });
     }
@@ -261,30 +240,27 @@ var IntranetSession = function (addr, username, password) {
 
         let redirect = getRedirection(hostname, headers.location);
 
-        if (redirect) {
+        if (!redirect) {
+            done(true);
+        }
 
-            logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
+        logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
 
-            let cookiestr = getCookieStr(headers["set-cookie"]);
+        let cookiestr = getCookieStr(headers["set-cookie"]);
 
-            if (redirect.path === '/my.policy') {
+        if (redirect.path === '/my.policy') {
 
-                handleLogin(redirect.hostname, redirect.path, cookiestr, done);
+            handleLogin(redirect.hostname, redirect.path, cookiestr, done);
 
-            } else if (redirect.path.indexOf('/saml/idp/profile/redirect/sls?SAMLRequest=') === 0) {
+        } else if (redirect.path.indexOf('/saml/idp/profile/redirect/sls?SAMLRequest=') === 0) {
 
-                handleLogout(redirect.hostname, redirect.path, cookiestr, done);
-
-            } else {
-
-                httpsGet(redirect.hostname, redirect.path, cookiestr, (resp, data) => {
-                    handleGetResponse(redirect.hostname, resp.headers, done);
-                });
-            }
+            handleLogout(redirect.hostname, redirect.path, cookiestr, done);
 
         } else {
 
-            done(true);
+            httpsGet(redirect.hostname, redirect.path, cookiestr, (resp, data) => {
+                handleGetResponse(redirect.hostname, resp.headers, done);
+            });
         }
     }
 
