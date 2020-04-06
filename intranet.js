@@ -2,32 +2,10 @@ const https = require('https');
 const url = require('url');
 const querystring = require('querystring');
 const xml2js = require('xml2js'); 
-const winston = require('winston');
 const AsyncLock = require('async-lock');
 
-const logger = winston.createLogger({
-  level: process.env.LOGGER_LEVEL || 'info',
-  format: winston.format.json(),
-  defaultMeta: {service: 'user-service'},
-  transports: [
-    //
-    // - Write to all logs with level `info` and below to `combined.log` 
-    // - Write all logs error (and below) to `error.log`.
-    //
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' })
-  ]
-});
-
-//
-// If we're not in production then log to the `console` with the format:
-// `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
-// 
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
+const debug = require('debug');
+const log = debug('intranet');
 
 var getCookieStr = function (cookies) {
 
@@ -36,14 +14,14 @@ var getCookieStr = function (cookies) {
 
 var httpsPost = function (hostname, path, cookies, postData, handler) {
 
-    logger.log('verbose', 'post: ' + hostname + path);
-    logger.log('verbose', 'cookies: ' + cookies);
+    log('post: ' + hostname + path);
+    log('cookies: ' + cookies);
 
     if (typeof postData !== 'string') {
         postData = querystring.stringify(postData);
     }
 
-    logger.log('verbose', 'postData: ' + postData);
+    log('postData: ' + postData);
 
     let options = {
         hostname: hostname,
@@ -58,8 +36,8 @@ var httpsPost = function (hostname, path, cookies, postData, handler) {
 
     let req = https.request(options, (resp) => {
 
-        logger.log('verbose', 'statusCode: ' + resp.statusCode);
-        logger.log('verbose', JSON.stringify(resp.headers));
+        log('statusCode: ' + resp.statusCode);
+        log(JSON.stringify(resp.headers));
 
         handler(resp);
     });
@@ -74,8 +52,8 @@ var httpsPost = function (hostname, path, cookies, postData, handler) {
 
 var httpsGet = function (hostname, path, cookies, handler) {
 
-    logger.log('verbose', 'get: ' + hostname + path);
-    logger.log('verbose', 'cookies: ' + cookies);
+    log('get: ' + hostname + path);
+    log('cookies: ' + cookies);
 
     let options = {
         hostname: hostname,
@@ -87,8 +65,8 @@ var httpsGet = function (hostname, path, cookies, handler) {
 
     https.get(options, (resp) => {
 
-        logger.log('verbose', 'statusCode: ' + resp.statusCode);
-        logger.log('verbose', JSON.stringify(resp.headers));
+        log('statusCode: ' + resp.statusCode);
+        log(JSON.stringify(resp.headers));
 
         let data = '';
 
@@ -205,7 +183,7 @@ var IntranetSession = function (addr, username, password) {
                     done(true);
                 }
 
-                logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
+                log('redirecting to: ' + redirect.hostname + redirect.path);
 
                 let cookiestr = getCookieStr(resp.headers["set-cookie"]);
 
@@ -244,7 +222,7 @@ var IntranetSession = function (addr, username, password) {
             done(true);
         }
 
-        logger.log('verbose', 'redirecting to: ' + redirect.hostname + redirect.path);
+        log('redirecting to: ' + redirect.hostname + redirect.path);
 
         let cookiestr = getCookieStr(headers["set-cookie"]);
 

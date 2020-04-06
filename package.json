@@ -1,6 +1,6 @@
 {
   "name": "intranet",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Intranet Access Module",
   "main": "intranet.js",
   "scripts": {
@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "async-lock": "^1.2.2",
-    "winston": "^3.1.0",
+    "debug": "^4.1.1",
     "xml2js": "^0.4.22"
   },
   "repository": {
