@@ -1,9 +1,10 @@
 const https = require('https');
 const url = require('url');
 const querystring = require('querystring');
-const xml2js = require('xml2js'); 
+const xml2js = require('xml2js');
 const AsyncLock = require('async-lock');
 const cookiejar = require('cookiejar');
+const zlib = require('zlib');
 
 const debug = require('debug');
 const log = debug('intranet');
@@ -33,13 +34,13 @@ var HttpsSession = function () {
     this.post = function (hostname, path, postData, success, failure) {
 
         log('POST', hostname, path);
-    
+
         if (typeof postData !== 'string') {
             postData = querystring.stringify(postData);
         }
-    
+
         log('postData: ' + postData);
-    
+
         let cookies = _cookieJar.getCookies(new cookiejar.CookieAccessInfo(hostname, path, true, false));
 
         log('cookies: ' + cookies.toString());
@@ -49,73 +50,90 @@ var HttpsSession = function () {
             path: path,
             method: 'POST',
             headers: {
-                //'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Content-Length': postData.length,
                 'Cookie': cookies.toValueString()
             }
         };
-    
+
         let req = https.request(options, (resp) => {
-    
+
             log('statusCode: ' + resp.statusCode);
             log('headers: ' + JSON.stringify(resp.headers));
-    
+
             if (resp.headers["set-cookie"]) {
                 _cookieJar.setCookies(resp.headers["set-cookie"], hostname, path);
             }
-    
+
             success(resp);
         });
-    
+
         req.on('error', (e) => {
             failure(e);
         });
-    
+
         req.write(postData);
         req.end();
     }
-    
+
     this.get = function (hostname, path, success, failure) {
-    
+
         log('GET', hostname, path);
-    
+
         let cookies = _cookieJar.getCookies(new cookiejar.CookieAccessInfo(hostname, path, true, false));
-    
+
         log('cookies: ' + cookies.toString());
 
         let options = {
             hostname: hostname,
             path: path,
             headers: {
-                //'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Encoding': 'gzip',
                 'Cookie': cookies.toValueString()
             }
         };
-    
+
         https.get(options, (resp) => {
-    
+
             log('statusCode: ' + resp.statusCode);
             log('headers: ' + JSON.stringify(resp.headers));
-    
+
             if (resp.headers["set-cookie"]) {
                 _cookieJar.setCookies(resp.headers["set-cookie"], hostname, path);
             }
-    
+
             let data = '';
-    
-            resp.on('data', (chunk) => {
-                data += chunk;
-            });
-    
-            resp.on('end', () => {
-                success(resp, data)
-            });
-    
+
+            if (resp.headers["content-encoding"] === "gzip") {
+
+                let gunzip = zlib.createGunzip();
+
+                gunzip.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                gunzip.on('end', () => {
+                    success(resp, data)
+                });
+
+                resp.pipe(gunzip);
+
+            } else {
+
+                resp.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                resp.on('end', () => {
+                    success(resp, data)
+                });
+            }
+
         }).on('error', (e) => {
             failure(e);
         });;
-    }    
+    }
 };
 
 var IntranetSession = function (addr, username, password) {
@@ -123,18 +141,25 @@ var IntranetSession = function (addr, username, password) {
     var _lock = new AsyncLock();
     var _httpsSession = new HttpsSession();
 
-    var handleFinal = function (hostname, path, done) {
+    var handleFinal = function (hostname, headers, done) {
 
-        _httpsSession.get(hostname, path, (resp, data) => {                
-            if (resp.statusCode === 302 && resp.headers.location) {
-                let redirect = getRedirection(hostname, resp.headers.location);
-                return _httpsSession.get(redirect.hostname, redirect.path, (resp, data) => {
-                    done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
-                }, (err) => {
-                    done(true, err);
-                })
+        if (!headers.location) {
+            done(true, "Missing redirect location");
+            return;
+        }
+
+        let redirect = getRedirection(hostname, headers.location);
+
+        log('redirecting to: ' + redirect.hostname + redirect.path);
+
+        _httpsSession.get(redirect.hostname, redirect.path, (resp, data) => {
+            if (resp.statusCode === 200) {
+                done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
+            } else if (resp.statusCode === 302) {
+                handleFinal(redirect.hostname, resp.headers, done);
+            } else {
+                done(true, "Unexpected status code: " + resp.statusCode);
             }
-            done(false, { path: path, statusCode: resp.statusCode, body: data });
         }, (err) => {
             done(true, err);
         });
@@ -145,7 +170,7 @@ var IntranetSession = function (addr, username, password) {
         xml2js.parseString(data, (err, result) => {
 
             if (!result) {
-                done(true);
+                done(true, "Error parsing APM payload");
                 return;
             }
 
@@ -159,17 +184,13 @@ var IntranetSession = function (addr, username, password) {
 
             _httpsSession.post(parsed.hostname, parsed.path, postData, (resp) => {
 
-                if (resp.statusCode !== 302 || !resp.headers.location) {
-                    done(true);
+                if (resp.statusCode !== 302) {
+                    done(true, "Unexpected status code: " + resp.statusCode);
                     return;
                 }
-    
-                let redirect = getRedirection(parsed.hostname, resp.headers.location);
-    
-                log('redirecting to: ' + redirect.hostname + redirect.path);
-    
-                handleFinal(redirect.hostname, redirect.path, done);
-    
+
+                handleFinal(parsed.hostname, resp.headers, done);
+
             }, (err) => {
                 done(true, err);
             });
@@ -187,13 +208,13 @@ var IntranetSession = function (addr, username, password) {
         // credentials
         _httpsSession.post(hostname, path, postData, (resp) => {
 
-            if (resp.statusCode !== 302 || !resp.headers.location) {
+            if (resp.statusCode !== 302) {
                 done(true, "Error: failed login attempt");
                 return;
             }
 
             handleGetResponse(hostname, resp.headers, done);
-    
+
         }, (err) => {
             done(true, err);
         });
@@ -202,7 +223,7 @@ var IntranetSession = function (addr, username, password) {
     var handleGetResponse = function (hostname, headers, done) {
 
         if (!headers.location) {
-            done(true);
+            done(true, "Missiong redirect location");
             return;
         }
 
@@ -237,18 +258,17 @@ var IntranetSession = function (addr, username, password) {
                 _httpsSession.get(addr, path, (resp, data) => {
 
                     if (resp.statusCode === 200) {
-
                         done(false, { path: path, statusCode: resp.statusCode, body: data });
-
-                    } else {
-
+                    } else if (resp.statusCode === 302) {
                         handleGetResponse(addr, resp.headers, done);
+                    } else {
+                        done(true, "Unexpected HTTP status: " + resp.statusCode);
                     }
 
                 }, (err) => {
                     done(true, err);
                 });
-                
+
             }, (err, data) => {
 
                 if (!err) {
