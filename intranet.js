@@ -141,31 +141,7 @@ var IntranetSession = function (addr, username, password) {
     var _lock = new AsyncLock();
     var _httpsSession = new HttpsSession();
 
-    var handleFinal = function (hostname, headers, done) {
-
-        if (!headers.location) {
-            done(true, "Missing redirect location");
-            return;
-        }
-
-        let redirect = getRedirection(hostname, headers.location);
-
-        log('redirecting to: ' + redirect.hostname + redirect.path);
-
-        _httpsSession.get(redirect.hostname, redirect.path, (resp, data) => {
-            if (resp.statusCode === 200) {
-                done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
-            } else if (resp.statusCode === 302) {
-                handleFinal(redirect.hostname, resp.headers, done);
-            } else {
-                done(true, "Unexpected status code: " + resp.statusCode);
-            }
-        }, (err) => {
-            done(true, err);
-        });
-    };
-
-    var processAPM = function (data, done) {
+    var handleAPM = function (data, done) {
 
         xml2js.parseString(data, (err, result) => {
 
@@ -189,7 +165,7 @@ var IntranetSession = function (addr, username, password) {
                     return;
                 }
 
-                handleFinal(parsed.hostname, resp.headers, done);
+                handleRedirection(parsed.hostname, resp.headers, done, true);
 
             }, (err) => {
                 done(true, err);
@@ -200,8 +176,8 @@ var IntranetSession = function (addr, username, password) {
     var handleLogin = function (hostname, path, done) {
 
         let postData = {
-            username: username,
-            password: password,
+            username,
+            password,
             vhost: 'standard'
         };
 
@@ -213,17 +189,17 @@ var IntranetSession = function (addr, username, password) {
                 return;
             }
 
-            handleGetResponse(hostname, resp.headers, done);
+            handleRedirection(hostname, resp.headers, done);
 
         }, (err) => {
             done(true, err);
         });
     };
 
-    var handleGetResponse = function (hostname, headers, done) {
+    var handleRedirection = function (hostname, headers, done, final) {
 
         if (!headers.location) {
-            done(true, "Missiong redirect location");
+            done(true, "Missing redirect location");
             return;
         }
 
@@ -233,14 +209,16 @@ var IntranetSession = function (addr, username, password) {
 
         _httpsSession.get(redirect.hostname, redirect.path, (resp, data) => {
             if (resp.statusCode === 200) {
-                if (redirect.path === '/my.policy') {
+                if (final) {
+                    done(false, { path: redirect.path, statusCode: resp.statusCode, body: data });
+                } else if (redirect.path === '/my.policy') {
                     handleLogin(redirect.hostname, redirect.path, done);
                 } else {
                     // token refresh or logout
-                    processAPM(data, done);
+                    handleAPM(data, done);
                 }
             } else if (resp.statusCode === 302) {
-                handleGetResponse(redirect.hostname, resp.headers, done);
+                handleRedirection(redirect.hostname, resp.headers, done, final);
             } else {
                 done(true, "Unexpected HTTP status: " + resp.statusCode);
             }
@@ -260,7 +238,7 @@ var IntranetSession = function (addr, username, password) {
                     if (resp.statusCode === 200) {
                         done(false, { path: path, statusCode: resp.statusCode, body: data });
                     } else if (resp.statusCode === 302) {
-                        handleGetResponse(addr, resp.headers, done);
+                        handleRedirection(addr, resp.headers, done);
                     } else {
                         done(true, "Unexpected HTTP status: " + resp.statusCode);
                     }
