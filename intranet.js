@@ -227,6 +227,11 @@ var IntranetSession = function (addr, username, password) {
         });
     }
 
+    this.setMaxPendingRequests = function (maxPending) {
+
+        _lock.maxPending = maxPending;
+    }
+
     this.get = function (path) {
 
         return new Promise((resolve, reject) => {
@@ -255,7 +260,7 @@ var IntranetSession = function (addr, username, password) {
                     reject(data);
                 }
 
-            }, {});
+            });
         });
     }
 
