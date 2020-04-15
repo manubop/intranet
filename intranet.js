@@ -146,7 +146,7 @@ var IntranetSession = function (addr, username, password) {
         xml2js.parseString(data, (err, result) => {
 
             if (!result) {
-                done(true, "Error parsing APM payload");
+                done(new Error("could not parse APM payload"));
                 return;
             }
 
@@ -161,15 +161,13 @@ var IntranetSession = function (addr, username, password) {
             _httpsSession.post(parsed.hostname, parsed.path, postData, (resp) => {
 
                 if (resp.statusCode !== 302) {
-                    done(true, "Unexpected status code: " + resp.statusCode);
+                    done(new Error("unexpected status code: " + resp.statusCode));
                     return;
                 }
 
                 handleRedirection(parsed.hostname, resp.headers, done, true);
 
-            }, (err) => {
-                done(true, err);
-            });
+            }, done);
         });
     };
 
@@ -185,21 +183,19 @@ var IntranetSession = function (addr, username, password) {
         _httpsSession.post(hostname, path, postData, (resp) => {
 
             if (resp.statusCode !== 302) {
-                done(true, "Error: failed login attempt");
+                done(new Error("failed login attempt"));
                 return;
             }
 
             handleRedirection(hostname, resp.headers, done);
 
-        }, (err) => {
-            done(true, err);
-        });
+        }, done);
     };
 
     var handleRedirection = function (hostname, headers, done, final) {
 
         if (!headers.location) {
-            done(true, "Missing redirect location");
+            done(new Error("missing redirect location"));
             return;
         }
 
@@ -220,11 +216,9 @@ var IntranetSession = function (addr, username, password) {
             } else if (resp.statusCode === 302) {
                 handleRedirection(redirect.hostname, resp.headers, done, final);
             } else {
-                done(true, "Unexpected HTTP status: " + resp.statusCode);
+                done(new Error("unexpected HTTP status: " + resp.statusCode));
             }
-        }, (err) => {
-            done(true, err);
-        });
+        }, done);
     }
 
     this.setMaxPendingRequests = function (maxPending) {
@@ -234,33 +228,19 @@ var IntranetSession = function (addr, username, password) {
 
     this.get = function (path) {
 
-        return new Promise((resolve, reject) => {
+        return _lock.acquire('cookie', (done) => {
 
-            _lock.acquire('cookie', (done) => {
+            _httpsSession.get(addr, path, (resp, data) => {
 
-                _httpsSession.get(addr, path, (resp, data) => {
-
-                    if (resp.statusCode === 200) {
-                        done(false, { path: path, statusCode: resp.statusCode, body: data });
-                    } else if (resp.statusCode === 302) {
-                        handleRedirection(addr, resp.headers, done);
-                    } else {
-                        done(true, "Unexpected HTTP status: " + resp.statusCode);
-                    }
-
-                }, (err) => {
-                    done(true, err);
-                });
-
-            }, (err, data) => {
-
-                if (!err) {
-                    resolve(data);
+                if (resp.statusCode === 200) {
+                    done(false, { path: path, statusCode: resp.statusCode, body: data });
+                } else if (resp.statusCode === 302) {
+                    handleRedirection(addr, resp.headers, done);
                 } else {
-                    reject(data);
+                    done(new Error("unexpected HTTP status: " + resp.statusCode));
                 }
 
-            });
+            }, done);
         });
     }
 
