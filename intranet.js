@@ -69,9 +69,7 @@ var HttpsSession = function () {
             success(resp);
         });
 
-        req.on('error', (e) => {
-            failure(e);
-        });
+        req.on('error', failure);
 
         req.write(postData);
         req.end();
@@ -130,9 +128,7 @@ var HttpsSession = function () {
                 });
             }
 
-        }).on('error', (e) => {
-            failure(e);
-        });;
+        }).on('error', failure);
     }
 };
 
