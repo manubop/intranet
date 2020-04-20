@@ -75,6 +75,35 @@ var HttpsSession = function () {
         req.end();
     }
 
+    var getResponseStream = function (resp) {
+
+        const encoding = resp.headers["content-encoding"];
+
+        let dec;
+
+        if (encoding === "gzip") {
+
+            dec = zlib.createGunzip();
+
+        } else if (encoding === "deflate") {
+
+            dec = zlib.createInflate();
+        
+        } else if (encoding === "br") {
+
+            dec = zlib.createBrotliDecompress();
+        }
+
+        if (dec) {
+
+            resp.pipe(dec);
+
+            return dec;
+        }
+
+        return resp;
+    }
+
     this.get = function (hostname, path, success, failure) {
 
         log('GET', hostname, path);
@@ -87,7 +116,7 @@ var HttpsSession = function () {
             hostname: hostname,
             path: path,
             headers: {
-                'Accept-Encoding': 'gzip',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Cookie': cookies.toValueString()
             }
         };
@@ -101,32 +130,16 @@ var HttpsSession = function () {
                 _cookieJar.setCookies(resp.headers["set-cookie"], hostname, path);
             }
 
+            let stream = getResponseStream(resp);
             let data = '';
 
-            if (resp.headers["content-encoding"] === "gzip") {
+            stream.on('data', (chunk) => {
+                data += chunk;
+            });
 
-                let gunzip = zlib.createGunzip();
-
-                gunzip.on('data', (chunk) => {
-                    data += chunk;
-                });
-
-                gunzip.on('end', () => {
-                    success(resp, data)
-                });
-
-                resp.pipe(gunzip);
-
-            } else {
-
-                resp.on('data', (chunk) => {
-                    data += chunk;
-                });
-
-                resp.on('end', () => {
-                    success(resp, data)
-                });
-            }
+            stream.on('end', () => {
+                success(resp, data);
+            });
 
         }).on('error', failure);
     }
