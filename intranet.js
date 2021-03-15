@@ -62,8 +62,8 @@ var HttpsSession = function () {
             log('statusCode: ' + resp.statusCode);
             log('headers: ' + JSON.stringify(resp.headers));
 
-            if (resp.headers["set-cookie"]) {
-                _cookieJar.setCookies(resp.headers["set-cookie"], hostname, path);
+            if (resp.headers['set-cookie']) {
+                _cookieJar.setCookies(resp.headers['set-cookie'], hostname, path);
             }
 
             success(resp);
@@ -77,19 +77,19 @@ var HttpsSession = function () {
 
     var getResponseStream = function (resp) {
 
-        const encoding = resp.headers["content-encoding"];
+        const encoding = resp.headers['content-encoding'];
 
         let dec;
 
-        if (encoding === "gzip") {
+        if (encoding === 'gzip') {
 
             dec = zlib.createGunzip();
 
-        } else if (encoding === "deflate") {
+        } else if (encoding === 'deflate') {
 
             dec = zlib.createInflate();
         
-        } else if (encoding === "br") {
+        } else if (encoding === 'br') {
 
             dec = zlib.createBrotliDecompress();
         }
@@ -126,8 +126,8 @@ var HttpsSession = function () {
             log('statusCode: ' + resp.statusCode);
             log('headers: ' + JSON.stringify(resp.headers));
 
-            if (resp.headers["set-cookie"]) {
-                _cookieJar.setCookies(resp.headers["set-cookie"], hostname, path);
+            if (resp.headers['set-cookie']) {
+                _cookieJar.setCookies(resp.headers['set-cookie'], hostname, path);
             }
 
             let stream = getResponseStream(resp);
@@ -155,7 +155,7 @@ var IntranetSession = function (addr, username, password) {
         xml2js.parseString(data, (err, result) => {
 
             if (!result) {
-                done(new Error("could not parse APM payload"));
+                done(new Error('could not parse APM payload'));
                 return;
             }
 
@@ -170,7 +170,7 @@ var IntranetSession = function (addr, username, password) {
             _httpsSession.post(parsed.hostname, parsed.path, postData, (resp) => {
 
                 if (resp.statusCode !== 302) {
-                    done(new Error("unexpected status code: " + resp.statusCode));
+                    done(new Error(`unexpected status code ${resp.statusCode} fetching ${parsed.path}`));
                     return;
                 }
 
@@ -192,7 +192,7 @@ var IntranetSession = function (addr, username, password) {
         _httpsSession.post(hostname, path, postData, (resp) => {
 
             if (resp.statusCode !== 302) {
-                done(new Error("failed login attempt"));
+                done(new Error('failed login attempt'));
                 return;
             }
 
@@ -204,7 +204,7 @@ var IntranetSession = function (addr, username, password) {
     var handleRedirection = function (hostname, headers, done, final) {
 
         if (!headers.location) {
-            done(new Error("missing redirect location"));
+            done(new Error('missing redirect location'));
             return;
         }
 
@@ -225,7 +225,7 @@ var IntranetSession = function (addr, username, password) {
             } else if (resp.statusCode === 302) {
                 handleRedirection(redirect.hostname, resp.headers, done, final);
             } else {
-                done(new Error("unexpected HTTP status: " + resp.statusCode));
+                done(new Error(`unexpected HTTP status ${resp.statusCode} fetching ${redirect.path}`));
             }
         }, done);
     }
@@ -246,7 +246,7 @@ var IntranetSession = function (addr, username, password) {
                 } else if (resp.statusCode === 302) {
                     handleRedirection(addr, resp.headers, done);
                 } else {
-                    done(new Error("unexpected HTTP status: " + resp.statusCode));
+                    done(new Error(`unexpected HTTP status ${resp.statusCode} fetching ${path}`));
                 }
 
             }, done);
